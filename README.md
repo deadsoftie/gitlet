@@ -33,11 +33,18 @@ Your project's `.gitignore` is never touched.
 
 ## Install
 
-> ⚠️ Gitlet is currently in development. Installation instructions will be added on first release.
-
 ```bash
 cargo install gitlet
 ```
+
+> Gitlet is currently in development. The binary is not yet published to crates.io. To build from source:
+>
+> ```bash
+> git clone https://github.com/your-username/gitlet
+> cd gitlet
+> cargo build --release
+> # binary is at target/release/gitlet
+> ```
 
 ---
 
@@ -101,17 +108,23 @@ gitlet list
 
 ---
 
-## Status
+## Limitations
 
-Gitlet is under active development. It is not yet ready for production use.
+- **Local only.** Gitlets exist only on your machine. There is no push, pull, or remote support in v1.
+- **No branching.** Each gitlet has a single `main` branch. Branching within a gitlet is not yet supported.
+- **No diff.** There is no `gitlet diff` command in v1. Use `gitlet log` to inspect history.
+- **No destroy.** Deleting a gitlet is not yet supported. Files remain excluded from the outer git until manually cleaned from `.git/info/exclude`.
+- **One file, one gitlet.** A file cannot be shared between gitlets.
 
-- [x] Design complete
-- [ ] Core CLI
-- [ ] `init` / `add` / `remove`
-- [ ] `commit` / `log`
-- [ ] `status` / `list` / `switch`
-- [ ] Integration tests
-- [ ] First release
+---
+
+## Roadmap
+
+- **Remote push** — push a gitlet as a git remote or submodule so it can be backed up or shared selectively
+- **Branching** — create and switch branches within a gitlet
+- **Diff** — `gitlet diff` to compare working tree against the last commit
+- **Destroy** — `gitlet destroy <name>` to remove a gitlet and clean up its exclusions
+- **Shell completions** — tab completion for all commands and gitlet names
 
 ---
 
