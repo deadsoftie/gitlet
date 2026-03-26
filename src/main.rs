@@ -1,4 +1,5 @@
 mod cli;
+mod repo;
 
 use clap::Parser;
 use cli::{Cli, Commands};
