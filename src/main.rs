@@ -23,9 +23,9 @@ fn run() -> anyhow::Result<()> {
             let name = name.as_deref().unwrap_or("default");
             gitlet::init(&git_root, name)
         }
-        Commands::Add { .. } => {
-            println!("[add] not yet implemented");
-            Ok(())
+        Commands::Add { files, to } => {
+            let git_root = repo::find_git_root()?;
+            gitlet::add(&git_root, &files, to.as_deref())
         }
         Commands::Remove { .. } => {
             println!("[remove] not yet implemented");
