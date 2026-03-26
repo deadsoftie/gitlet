@@ -127,6 +127,76 @@ pub fn add(git_root: &Path, files: &[String], to: Option<&str>) -> anyhow::Resul
     Ok(())
 }
 
+pub fn remove(git_root: &Path, file: &str, to: Option<&str>) -> anyhow::Result<()> {
+    let cfg = config::load(git_root)?;
+    let target = to.unwrap_or(&cfg.active).to_string();
+
+    let gitlet_dir = git_root.join(".gitlet").join(&target);
+    if !gitlet_dir.exists() {
+        return Err(anyhow!("gitlet '{}' does not exist.", target));
+    }
+
+    // Resolve path — file may have been deleted from disk, so don't require it to exist
+    let rel = rel_path(git_root, file)?;
+
+    // Verify the file is tracked by this gitlet
+    let repo = git2::Repository::open(&gitlet_dir)
+        .with_context(|| format!("failed to open gitlet repo at {}", gitlet_dir.display()))?;
+    let mut index = repo.index().context("failed to get gitlet index")?;
+
+    if index.get_path(&rel, 0).is_none() {
+        return Err(anyhow!(
+            "'{}' is not tracked by gitlet '{}'",
+            rel.display(),
+            target
+        ));
+    }
+
+    index
+        .remove_path(&rel)
+        .with_context(|| format!("failed to remove {} from gitlet index", rel.display()))?;
+    index.write().context("failed to write gitlet index")?;
+
+    exclude::remove_exclusion(git_root, &rel.to_string_lossy())?;
+
+    println!(
+        "Removed {} from gitlet '{}'. The file is now visible to git.",
+        rel.display(),
+        target
+    );
+    Ok(())
+}
+
+/// Build a repo-relative path from a raw file argument without requiring the file to exist.
+fn rel_path(git_root: &Path, file: &str) -> anyhow::Result<PathBuf> {
+    let p = PathBuf::from(file);
+    let abs = if p.is_absolute() {
+        p
+    } else {
+        std::env::current_dir()?.join(&p)
+    };
+    // Normalise without hitting the filesystem (file may be deleted)
+    let abs = normalize_path(&abs);
+    abs.strip_prefix(git_root)
+        .with_context(|| format!("'{}' is outside the git repo", file))
+        .map(|p| p.to_path_buf())
+}
+
+/// Lexically normalise a path (resolve `.` and `..`) without hitting the filesystem.
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            std::path::Component::CurDir => {}
+            c => out.push(c),
+        }
+    }
+    out
+}
+
 /// Resolve a file argument to an absolute path, erroring if it does not exist.
 fn resolve_file(_git_root: &Path, file: &str) -> anyhow::Result<PathBuf> {
     let p = PathBuf::from(file);
