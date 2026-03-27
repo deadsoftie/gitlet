@@ -19,6 +19,9 @@ git clone https://github.com/deadsoftie/gitlet
 cd gitlet
 cargo build --release
 # binary is at target/release/gitlet
+
+# to install it globally so you can run gitlet from anywhere
+cargo install --path .
 ```
 
 Requires Rust 1.82 or later.
