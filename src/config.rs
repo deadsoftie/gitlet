@@ -5,27 +5,27 @@ use anyhow::{anyhow, Context};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Default, Debug)]
-pub struct GitletConfig {
+pub struct GitnookConfig {
     #[serde(default)]
     pub active: String,
     #[serde(default)]
-    pub gitlets: HashMap<String, GitletEntry>,
+    pub gitnooks: HashMap<String, GitnookEntry>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct GitletEntry {
+pub struct GitnookEntry {
     pub created: String,
 }
 
 fn config_path(root: &Path) -> PathBuf {
-    root.join(".gitlet").join("config.toml")
+    root.join(".gitnook").join("config.toml")
 }
 
-pub fn load(root: &Path) -> anyhow::Result<GitletConfig> {
+pub fn load(root: &Path) -> anyhow::Result<GitnookConfig> {
     let path = config_path(root);
     if !path.exists() {
         return Err(anyhow!(
-            "No gitlets found. Run 'gitlet init' first."
+            "No gitnooks found. Run 'gitnook init' first."
         ));
     }
     let contents = std::fs::read_to_string(&path)
@@ -33,7 +33,7 @@ pub fn load(root: &Path) -> anyhow::Result<GitletConfig> {
     toml::from_str(&contents).with_context(|| format!("failed to parse {}", path.display()))
 }
 
-pub fn save(root: &Path, config: &GitletConfig) -> anyhow::Result<()> {
+pub fn save(root: &Path, config: &GitnookConfig) -> anyhow::Result<()> {
     let path = config_path(root);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)

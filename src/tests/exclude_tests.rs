@@ -23,7 +23,7 @@ fn add_creates_file_with_header_and_pattern() {
 
     let contents =
         fs::read_to_string(tmp.path().join(".git").join("info").join("exclude")).unwrap();
-    assert!(contents.contains("# gitlet managed entries"));
+    assert!(contents.contains("# gitnook managed entries"));
     assert!(contents.contains("notes.md"));
 }
 

@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "gitlet", about = "Lightweight local git contexts inside a repo", version)]
+#[command(name = "gitnook", about = "Lightweight local git contexts inside a repo", version)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -9,52 +9,52 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Initialize a new named gitlet
+    /// Initialize a new named gitnook
     Init {
-        /// Name of the gitlet (default: "default")
+        /// Name of the gitnook (default: "default")
         name: Option<String>,
     },
-    /// Stage one or more files in a gitlet
+    /// Stage one or more files in a gitnook
     Add {
         /// Files to stage
         #[arg(required = true)]
         files: Vec<String>,
-        /// Target gitlet (overrides active)
+        /// Target gitnook (overrides active)
         #[arg(long)]
         to: Option<String>,
     },
-    /// Untrack a file from a gitlet
+    /// Untrack a file from a gitnook
     Remove {
         /// File to untrack
         file: String,
-        /// Target gitlet (overrides active)
+        /// Target gitnook (overrides active)
         #[arg(long)]
         to: Option<String>,
     },
-    /// Commit staged changes in a gitlet
+    /// Commit staged changes in a gitnook
     Commit {
         /// Commit message
         #[arg(short)]
         m: String,
-        /// Target gitlet (overrides active)
+        /// Target gitnook (overrides active)
         #[arg(long)]
         to: Option<String>,
     },
-    /// Show status of gitlets
+    /// Show status of gitnooks
     Status {
-        /// Name of a specific gitlet
+        /// Name of a specific gitnook
         name: Option<String>,
     },
-    /// Show commit history of a gitlet
+    /// Show commit history of a gitnook
     Log {
-        /// Name of a specific gitlet
+        /// Name of a specific gitnook
         name: Option<String>,
     },
-    /// List all gitlets in the repo
+    /// List all gitnooks in the repo
     List,
-    /// Switch the active gitlet
+    /// Switch the active gitnook
     Switch {
-        /// Name of the gitlet to activate
+        /// Name of the gitnook to activate
         name: String,
     },
 }

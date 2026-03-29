@@ -3,37 +3,37 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context};
 use chrono::{FixedOffset, TimeZone, Utc};
 
-use crate::config::{self, GitletConfig, GitletEntry};
+use crate::config::{self, GitnookConfig, GitnookEntry};
 use crate::exclude;
 
 pub fn init(git_root: &Path, name: &str) -> anyhow::Result<()> {
-    let gitlet_dir = git_root.join(".gitlet").join(name);
+    let gitnook_dir = git_root.join(".gitnook").join(name);
 
-    if gitlet_dir.exists() {
+    if gitnook_dir.exists() {
         return Err(anyhow!(
-            "gitlet '{}' already exists. Run 'gitlet list' to see all gitlets.",
+            "gitnook '{}' already exists. Run 'gitnook list' to see all gitnooks.",
             name
         ));
     }
 
-    // Create the bare git repo for this gitlet (.gitlet/ is created as a side-effect)
-    std::fs::create_dir_all(&gitlet_dir)
-        .with_context(|| format!("failed to create {}", gitlet_dir.display()))?;
-    git2::Repository::init_bare(&gitlet_dir)
-        .with_context(|| format!("failed to init bare repo at {}", gitlet_dir.display()))?;
+    // Create the bare git repo for this gitnook (.gitnook/ is created as a side-effect)
+    std::fs::create_dir_all(&gitnook_dir)
+        .with_context(|| format!("failed to create {}", gitnook_dir.display()))?;
+    git2::Repository::init_bare(&gitnook_dir)
+        .with_context(|| format!("failed to init bare repo at {}", gitnook_dir.display()))?;
 
-    // Create or update .gitlet/config.toml
-    let gitlet_root = git_root.join(".gitlet");
+    // Create or update .gitnook/config.toml
+    let gitnook_root = git_root.join(".gitnook");
 
-    let mut cfg = if gitlet_root.join("config.toml").exists() {
+    let mut cfg = if gitnook_root.join("config.toml").exists() {
         config::load(git_root)?
     } else {
-        GitletConfig::default()
+        GitnookConfig::default()
     };
 
-    cfg.gitlets.insert(
+    cfg.gitnooks.insert(
         name.to_string(),
-        GitletEntry {
+        GitnookEntry {
             created: Utc::now().to_rfc3339(),
         },
     );
@@ -44,10 +44,10 @@ pub fn init(git_root: &Path, name: &str) -> anyhow::Result<()> {
 
     config::save(git_root, &cfg)?;
 
-    // Add .gitlet/ to .git/info/exclude (idempotent)
-    exclude::add_exclusion(git_root, ".gitlet/")?;
+    // Add .gitnook/ to .git/info/exclude (idempotent)
+    exclude::add_exclusion(git_root, ".gitnook/")?;
 
-    println!("Initialized gitlet '{}'", name);
+    println!("Initialized gitnook '{}'", name);
     Ok(())
 }
 
@@ -62,13 +62,13 @@ pub fn add(git_root: &Path, files: &[String], to: Option<&str>) -> anyhow::Resul
     let cfg = config::load(git_root)?;
     let target = to.unwrap_or(&cfg.active).to_string();
 
-    let gitlet_dir = git_root.join(".gitlet").join(&target);
-    if !gitlet_dir.exists() {
-        return Err(anyhow!("gitlet '{}' does not exist.", target));
+    let gitnook_dir = git_root.join(".gitnook").join(&target);
+    if !gitnook_dir.exists() {
+        return Err(anyhow!("gitnook '{}' does not exist.", target));
     }
 
-    let repo = git2::Repository::open(&gitlet_dir)
-        .with_context(|| format!("failed to open gitlet repo at {}", gitlet_dir.display()))?;
+    let repo = git2::Repository::open(&gitnook_dir)
+        .with_context(|| format!("failed to open gitnook repo at {}", gitnook_dir.display()))?;
 
     for file in files {
         // resolve_file canonicalizes; with git_root also canonical, strip_prefix is safe.
@@ -87,26 +87,26 @@ pub fn add(git_root: &Path, files: &[String], to: Option<&str>) -> anyhow::Resul
             );
         }
 
-        // Error only if the file is owned by a *different* gitlet.
-        // Re-adding to the same gitlet is how the user stages modifications.
-        if let Some(owner) = find_owning_gitlet(git_root, &cfg, &rel)? {
+        // Error only if the file is owned by a *different* gitnook.
+        // Re-adding to the same gitnook is how the user stages modifications.
+        if let Some(owner) = find_owning_gitnook(git_root, &cfg, &rel)? {
             if owner != target {
                 return Err(anyhow!(
-                    "{} is already tracked by gitlet '{}'",
+                    "{} is already tracked by gitnook '{}'",
                     rel.display(),
                     owner
                 ));
             }
         }
 
-        // Stage in the target gitlet index.
+        // Stage in the target gitnook index.
         // Bare repos have no workdir, so we create a blob from the real file
         // and add it to the index manually. Use the canonical abs path directly.
         let blob_id = repo
             .blob_path(&abs)
             .with_context(|| format!("failed to create blob for {}", abs.display()))?;
 
-        let mut index = repo.index().context("failed to get gitlet index")?;
+        let mut index = repo.index().context("failed to get gitnook index")?;
         let entry = git2::IndexEntry {
             ctime: git2::IndexTime::new(0, 0),
             mtime: git2::IndexTime::new(0, 0),
@@ -122,14 +122,14 @@ pub fn add(git_root: &Path, files: &[String], to: Option<&str>) -> anyhow::Resul
             path: rel.to_string_lossy().into_owned().into_bytes(),
         };
         index.add(&entry).with_context(|| {
-            format!("failed to stage {} in gitlet '{}'", rel.display(), target)
+            format!("failed to stage {} in gitnook '{}'", rel.display(), target)
         })?;
-        index.write().context("failed to write gitlet index")?;
+        index.write().context("failed to write gitnook index")?;
 
         // Add to .git/info/exclude
         exclude::add_exclusion(git_root, &rel.to_string_lossy())?;
 
-        println!("Added {} to gitlet '{}'", rel.display(), target);
+        println!("Added {} to gitnook '{}'", rel.display(), target);
     }
 
     Ok(())
@@ -145,22 +145,22 @@ pub fn remove(git_root: &Path, file: &str, to: Option<&str>) -> anyhow::Result<(
     let cfg = config::load(git_root)?;
     let target = to.unwrap_or(&cfg.active).to_string();
 
-    let gitlet_dir = git_root.join(".gitlet").join(&target);
-    if !gitlet_dir.exists() {
-        return Err(anyhow!("gitlet '{}' does not exist.", target));
+    let gitnook_dir = git_root.join(".gitnook").join(&target);
+    if !gitnook_dir.exists() {
+        return Err(anyhow!("gitnook '{}' does not exist.", target));
     }
 
     // Resolve path — file may have been deleted from disk, so don't require it to exist
     let rel = rel_path(git_root, file)?;
 
-    // Verify the file is tracked by this gitlet
-    let repo = git2::Repository::open(&gitlet_dir)
-        .with_context(|| format!("failed to open gitlet repo at {}", gitlet_dir.display()))?;
-    let mut index = repo.index().context("failed to get gitlet index")?;
+    // Verify the file is tracked by this gitnook
+    let repo = git2::Repository::open(&gitnook_dir)
+        .with_context(|| format!("failed to open gitnook repo at {}", gitnook_dir.display()))?;
+    let mut index = repo.index().context("failed to get gitnook index")?;
 
     if index.get_path(&rel, 0).is_none() {
         return Err(anyhow!(
-            "'{}' is not tracked by gitlet '{}'",
+            "'{}' is not tracked by gitnook '{}'",
             rel.display(),
             target
         ));
@@ -168,13 +168,13 @@ pub fn remove(git_root: &Path, file: &str, to: Option<&str>) -> anyhow::Result<(
 
     index
         .remove_path(&rel)
-        .with_context(|| format!("failed to remove {} from gitlet index", rel.display()))?;
-    index.write().context("failed to write gitlet index")?;
+        .with_context(|| format!("failed to remove {} from gitnook index", rel.display()))?;
+    index.write().context("failed to write gitnook index")?;
 
     exclude::remove_exclusion(git_root, &rel.to_string_lossy())?;
 
     println!(
-        "Removed {} from gitlet '{}'. The file is now visible to git.",
+        "Removed {} from gitnook '{}'. The file is now visible to git.",
         rel.display(),
         target
     );
@@ -190,16 +190,16 @@ pub fn commit(git_root: &Path, message: &str, to: Option<&str>) -> anyhow::Resul
     let cfg = config::load(git_root)?;
     let target = to.unwrap_or(&cfg.active).to_string();
 
-    let gitlet_dir = git_root.join(".gitlet").join(&target);
-    if !gitlet_dir.exists() {
-        return Err(anyhow!("gitlet '{}' does not exist.", target));
+    let gitnook_dir = git_root.join(".gitnook").join(&target);
+    if !gitnook_dir.exists() {
+        return Err(anyhow!("gitnook '{}' does not exist.", target));
     }
 
-    let repo = git2::Repository::open(&gitlet_dir)
-        .with_context(|| format!("failed to open gitlet repo at {}", gitlet_dir.display()))?;
+    let repo = git2::Repository::open(&gitnook_dir)
+        .with_context(|| format!("failed to open gitnook repo at {}", gitnook_dir.display()))?;
 
     // Build the tree from the current index
-    let mut index = repo.index().context("failed to get gitlet index")?;
+    let mut index = repo.index().context("failed to get gitnook index")?;
     let tree_id = index.write_tree().context("failed to write index tree")?;
     let tree = repo.find_tree(tree_id).context("failed to find tree")?;
 
@@ -234,9 +234,9 @@ pub fn status(git_root: &Path, name: Option<&str>) -> anyhow::Result<()> {
     let git_root = git_root.as_path();
 
     let cfg = match config::load(git_root) {
-        Ok(c) if !c.gitlets.is_empty() => c,
+        Ok(c) if !c.gitnooks.is_empty() => c,
         _ => {
-            println!("No gitlets found. Run 'gitlet init' to create one.");
+            println!("No gitnooks found. Run 'gitnook init' to create one.");
             return Ok(());
         }
     };
@@ -244,13 +244,13 @@ pub fn status(git_root: &Path, name: Option<&str>) -> anyhow::Result<()> {
     // Collect the names to display, sorted for deterministic output
     let names: Vec<&str> = match name {
         Some(n) => {
-            if !cfg.gitlets.contains_key(n) {
-                return Err(anyhow!("gitlet '{}' does not exist.", n));
+            if !cfg.gitnooks.contains_key(n) {
+                return Err(anyhow!("gitnook '{}' does not exist.", n));
             }
             vec![n]
         }
         None => {
-            let mut v: Vec<&str> = cfg.gitlets.keys().map(String::as_str).collect();
+            let mut v: Vec<&str> = cfg.gitnooks.keys().map(String::as_str).collect();
             v.sort();
             v
         }
@@ -262,19 +262,19 @@ pub fn status(git_root: &Path, name: Option<&str>) -> anyhow::Result<()> {
     for name in &names {
         let label = format!("[{}]", name);
         let padding = " ".repeat(max_len - name.len() + 2);
-        let summary = gitlet_status_summary(git_root, name)?;
+        let summary = gitnook_status_summary(git_root, name)?;
         println!("{}{}{}", label, padding, summary);
     }
 
     Ok(())
 }
 
-/// Compute a one-line status summary for a single gitlet.
-fn gitlet_status_summary(git_root: &Path, name: &str) -> anyhow::Result<String> {
-    let gitlet_dir = git_root.join(".gitlet").join(name);
-    let repo = git2::Repository::open(&gitlet_dir)
-        .with_context(|| format!("failed to open gitlet repo '{}'", name))?;
-    let index = repo.index().context("failed to read gitlet index")?;
+/// Compute a one-line status summary for a single gitnook.
+fn gitnook_status_summary(git_root: &Path, name: &str) -> anyhow::Result<String> {
+    let gitnook_dir = git_root.join(".gitnook").join(name);
+    let repo = git2::Repository::open(&gitnook_dir)
+        .with_context(|| format!("failed to open gitnook repo '{}'", name))?;
+    let index = repo.index().context("failed to read gitnook index")?;
 
     // Resolve HEAD tree once; None means no commits yet
     let head_tree = match repo.head() {
@@ -344,19 +344,19 @@ pub fn log(git_root: &Path, name: Option<&str>) -> anyhow::Result<()> {
     let cfg = config::load(git_root)?;
     let target = name.unwrap_or(&cfg.active);
 
-    if !cfg.gitlets.contains_key(target) {
-        return Err(anyhow!("gitlet '{}' does not exist.", target));
+    if !cfg.gitnooks.contains_key(target) {
+        return Err(anyhow!("gitnook '{}' does not exist.", target));
     }
 
-    let gitlet_dir = git_root.join(".gitlet").join(target);
-    let repo = git2::Repository::open(&gitlet_dir)
-        .with_context(|| format!("failed to open gitlet repo '{}'", target))?;
+    let gitnook_dir = git_root.join(".gitnook").join(target);
+    let repo = git2::Repository::open(&gitnook_dir)
+        .with_context(|| format!("failed to open gitnook repo '{}'", target))?;
 
     // If HEAD doesn't resolve there are no commits yet
     let head = match repo.head() {
         Ok(h) => h,
         Err(_) => {
-            println!("No commits yet in gitlet '{}'", target);
+            println!("No commits yet in gitnook '{}'", target);
             return Ok(());
         }
     };
@@ -413,15 +413,15 @@ pub fn list(git_root: &Path) -> anyhow::Result<()> {
     let git_root = git_root.as_path();
 
     let cfg = match config::load(git_root) {
-        Ok(c) if !c.gitlets.is_empty() => c,
+        Ok(c) if !c.gitnooks.is_empty() => c,
         _ => {
-            println!("No gitlets initialized in this repo. Run 'gitlet init'.");
+            println!("No gitnooks initialized in this repo. Run 'gitnook init'.");
             return Ok(());
         }
     };
 
     // Sort names for deterministic output
-    let mut names: Vec<&str> = cfg.gitlets.keys().map(String::as_str).collect();
+    let mut names: Vec<&str> = cfg.gitnooks.keys().map(String::as_str).collect();
     names.sort();
 
     let max_len = names.iter().map(|n| n.len()).max().unwrap_or(0);
@@ -431,13 +431,13 @@ pub fn list(git_root: &Path) -> anyhow::Result<()> {
         let marker = if is_active { "*" } else { " " };
         let active_label = if is_active { "(active)" } else { "        " };
 
-        // Count files tracked in this gitlet's index
+        // Count files tracked in this gitnook's index
         let file_count = {
-            let gitlet_dir = git_root.join(".gitlet").join(name);
-            let repo = git2::Repository::open(&gitlet_dir)
-                .with_context(|| format!("failed to open gitlet repo '{}'", name))?;
+            let gitnook_dir = git_root.join(".gitnook").join(name);
+            let repo = git2::Repository::open(&gitnook_dir)
+                .with_context(|| format!("failed to open gitnook repo '{}'", name))?;
             repo.index()
-                .with_context(|| format!("failed to read index for gitlet '{}'", name))?
+                .with_context(|| format!("failed to read index for gitnook '{}'", name))?
                 .len()
         };
 
@@ -468,14 +468,14 @@ fn read_git_identity(git_root: &Path) -> (String, String) {
         Ok(cfg) => {
             name = cfg
                 .get_string("user.name")
-                .unwrap_or_else(|_| "gitlet user".to_string());
+                .unwrap_or_else(|_| "gitnook user".to_string());
             email = cfg
                 .get_string("user.email")
-                .unwrap_or_else(|_| "gitlet@local".to_string());
+                .unwrap_or_else(|_| "gitnook@local".to_string());
         }
         Err(_) => {
-            name = "gitlet user".to_string();
-            email = "gitlet@local".to_string();
+            name = "gitnook user".to_string();
+            email = "gitnook@local".to_string();
         }
     }
 
@@ -534,22 +534,22 @@ fn is_tracked_by_outer_git(git_root: &Path, rel: &Path) -> anyhow::Result<bool> 
     Ok(index.get_path(rel, 0).is_some())
 }
 
-/// Return the name of the gitlet that already tracks `rel`, if any.
-fn find_owning_gitlet(
+/// Return the name of the gitnook that already tracks `rel`, if any.
+fn find_owning_gitnook(
     git_root: &Path,
-    cfg: &GitletConfig,
+    cfg: &GitnookConfig,
     rel: &Path,
 ) -> anyhow::Result<Option<String>> {
-    for name in cfg.gitlets.keys() {
-        let gitlet_dir = git_root.join(".gitlet").join(name);
-        if !gitlet_dir.exists() {
+    for name in cfg.gitnooks.keys() {
+        let gitnook_dir = git_root.join(".gitnook").join(name);
+        if !gitnook_dir.exists() {
             continue;
         }
-        let repo = git2::Repository::open(&gitlet_dir)
-            .with_context(|| format!("failed to open gitlet repo '{}'", name))?;
+        let repo = git2::Repository::open(&gitnook_dir)
+            .with_context(|| format!("failed to open gitnook repo '{}'", name))?;
         let index = repo
             .index()
-            .with_context(|| format!("failed to read index for gitlet '{}'", name))?;
+            .with_context(|| format!("failed to read index for gitnook '{}'", name))?;
         if index.get_path(rel, 0).is_some() {
             return Ok(Some(name.clone()));
         }
@@ -560,19 +560,19 @@ fn find_owning_gitlet(
 pub fn switch(git_root: &Path, name: &str) -> anyhow::Result<()> {
     let cfg = config::load(git_root)?;
 
-    if !cfg.gitlets.contains_key(name) {
+    if !cfg.gitnooks.contains_key(name) {
         return Err(anyhow!(
-            "gitlet '{}' does not exist. Run 'gitlet list' to see all gitlets.",
+            "gitnook '{}' does not exist. Run 'gitnook list' to see all gitnooks.",
             name
         ));
     }
 
     config::set_active(git_root, name)?;
-    println!("Switched active gitlet to '{}'", name);
+    println!("Switched active gitnook to '{}'", name);
     Ok(())
 }
 
 #[cfg(test)]
-#[path = "tests/gitlet_tests.rs"]
+#[path = "tests/gitnook_tests.rs"]
 mod tests;
 

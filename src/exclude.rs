@@ -33,7 +33,7 @@ pub fn add_exclusion(git_root: &Path, pattern: &str) -> anyhow::Result<()> {
         std::fs::read_to_string(&path)
             .with_context(|| format!("failed to read {}", path.display()))?
     } else {
-        "# gitlet managed entries\n".to_string()
+        "# gitnook managed entries\n".to_string()
     };
 
     if !contents.ends_with('\n') {

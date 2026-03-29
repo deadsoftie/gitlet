@@ -20,15 +20,15 @@ fn make_file(root: &Path, name: &str, content: &str) -> String {
     path.to_string_lossy().into_owned()
 }
 
-/// Return the number of entries in a gitlet's index.
+/// Return the number of entries in a gitnook's index.
 fn index_len(root: &Path, name: &str) -> usize {
-    let repo = git2::Repository::open(root.join(".gitlet").join(name)).unwrap();
+    let repo = git2::Repository::open(root.join(".gitnook").join(name)).unwrap();
     repo.index().unwrap().len()
 }
 
-/// Return true if the gitlet's index contains an entry with the given relative path.
-fn index_has(root: &Path, gitlet: &str, rel: &str) -> bool {
-    let repo = git2::Repository::open(root.join(".gitlet").join(gitlet)).unwrap();
+/// Return true if the gitnook's index contains an entry with the given relative path.
+fn index_has(root: &Path, gitnook: &str, rel: &str) -> bool {
+    let repo = git2::Repository::open(root.join(".gitnook").join(gitnook)).unwrap();
     let index = repo.index().unwrap();
     index.get_path(Path::new(rel), 0).is_some()
 }
@@ -65,7 +65,7 @@ fn normalize_identity_on_clean_path() {
 fn init_creates_bare_repo_directory() {
     let (_tmp, root) = setup();
     init(&root, "default").unwrap();
-    assert!(root.join(".gitlet/default/HEAD").exists());
+    assert!(root.join(".gitnook/default/HEAD").exists());
 }
 
 #[test]
@@ -74,11 +74,11 @@ fn init_creates_config_with_active() {
     init(&root, "default").unwrap();
     let cfg = crate::config::load(&root).unwrap();
     assert_eq!(cfg.active, "default");
-    assert!(cfg.gitlets.contains_key("default"));
+    assert!(cfg.gitnooks.contains_key("default"));
 }
 
 #[test]
-fn init_first_gitlet_becomes_active() {
+fn init_first_gitnook_becomes_active() {
     let (_tmp, root) = setup();
     init(&root, "first").unwrap();
     init(&root, "second").unwrap();
@@ -87,10 +87,10 @@ fn init_first_gitlet_becomes_active() {
 }
 
 #[test]
-fn init_adds_gitlet_dir_to_exclude() {
+fn init_adds_gitnook_dir_to_exclude() {
     let (_tmp, root) = setup();
     init(&root, "default").unwrap();
-    assert!(crate::exclude::has_exclusion(&root, ".gitlet/").unwrap());
+    assert!(crate::exclude::has_exclusion(&root, ".gitnook/").unwrap());
 }
 
 #[test]
@@ -107,14 +107,14 @@ fn init_multiple_names_all_registered_in_config() {
     init(&root, "alpha").unwrap();
     init(&root, "beta").unwrap();
     let cfg = crate::config::load(&root).unwrap();
-    assert!(cfg.gitlets.contains_key("alpha"));
-    assert!(cfg.gitlets.contains_key("beta"));
+    assert!(cfg.gitnooks.contains_key("alpha"));
+    assert!(cfg.gitnooks.contains_key("beta"));
 }
 
 // ── add ────────────────────────────────────────────────────────────────────
 
 #[test]
-fn add_stages_file_in_gitlet_index() {
+fn add_stages_file_in_gitnook_index() {
     let (_tmp, root) = setup();
     init(&root, "default").unwrap();
     let file = make_file(&root, "notes.md", "hello");
@@ -142,7 +142,7 @@ fn add_multiple_files_in_one_call() {
 }
 
 #[test]
-fn add_to_named_gitlet_via_to_flag() {
+fn add_to_named_gitnook_via_to_flag() {
     let (_tmp, root) = setup();
     init(&root, "default").unwrap();
     init(&root, "secrets").unwrap();
@@ -153,24 +153,24 @@ fn add_to_named_gitlet_via_to_flag() {
 }
 
 #[test]
-fn add_cross_gitlet_errors() {
+fn add_cross_gitnook_errors() {
     let (_tmp, root) = setup();
     init(&root, "default").unwrap();
     init(&root, "other").unwrap();
     let file = make_file(&root, "notes.md", "hello");
     add(&root, &[file.clone()], Some("default")).unwrap();
     let err = add(&root, &[file], Some("other")).unwrap_err();
-    assert!(err.to_string().contains("already tracked by gitlet"));
+    assert!(err.to_string().contains("already tracked by gitnook"));
 }
 
 #[test]
-fn add_restage_same_gitlet_updates_index() {
+fn add_restage_same_gitnook_updates_index() {
     let (_tmp, root) = setup();
     init(&root, "default").unwrap();
     let file = make_file(&root, "notes.md", "v1");
     add(&root, &[file.clone()], None).unwrap();
     fs::write(&file, "v2").unwrap();
-    // Re-adding to same gitlet stages the modification — should not error
+    // Re-adding to same gitnook stages the modification — should not error
     add(&root, &[file], None).unwrap();
     assert_eq!(index_len(&root, "default"), 1);
 }
@@ -216,7 +216,7 @@ fn remove_untracked_file_errors() {
 }
 
 #[test]
-fn remove_wrong_gitlet_errors() {
+fn remove_wrong_gitnook_errors() {
     let (_tmp, root) = setup();
     init(&root, "default").unwrap();
     init(&root, "other").unwrap();
@@ -237,7 +237,7 @@ fn commit_creates_root_commit() {
     add(&root, &[file], None).unwrap();
     commit(&root, "initial", None).unwrap();
 
-    let repo = git2::Repository::open(root.join(".gitlet/default")).unwrap();
+    let repo = git2::Repository::open(root.join(".gitnook/default")).unwrap();
     let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
     assert_eq!(head_commit.message().unwrap(), "initial");
     assert_eq!(head_commit.parent_count(), 0);
@@ -254,7 +254,7 @@ fn commit_chains_parent() {
     add(&root, &[file], None).unwrap();
     commit(&root, "second", None).unwrap();
 
-    let repo = git2::Repository::open(root.join(".gitlet/default")).unwrap();
+    let repo = git2::Repository::open(root.join(".gitnook/default")).unwrap();
     let head = repo.head().unwrap().peel_to_commit().unwrap();
     assert_eq!(head.message().unwrap(), "second");
     assert_eq!(head.parent_count(), 1);
@@ -270,7 +270,7 @@ fn commit_uses_identity_fallback() {
     add(&root, &[file], None).unwrap();
     commit(&root, "test commit", None).unwrap();
 
-    let repo = git2::Repository::open(root.join(".gitlet/default")).unwrap();
+    let repo = git2::Repository::open(root.join(".gitnook/default")).unwrap();
     let c = repo.head().unwrap().peel_to_commit().unwrap();
     // Either real config or the fallback values — just must not be empty
     assert!(!c.author().name().unwrap_or("").is_empty());
@@ -284,7 +284,7 @@ fn status_new_file_before_commit() {
     init(&root, "default").unwrap();
     let file = make_file(&root, "notes.md", "hello");
     add(&root, &[file], None).unwrap();
-    let summary = gitlet_status_summary(&root, "default").unwrap();
+    let summary = gitnook_status_summary(&root, "default").unwrap();
     assert!(summary.contains("new file"));
 }
 
@@ -295,7 +295,7 @@ fn status_clean_after_commit() {
     let file = make_file(&root, "notes.md", "hello");
     add(&root, &[file], None).unwrap();
     commit(&root, "init", None).unwrap();
-    let summary = gitlet_status_summary(&root, "default").unwrap();
+    let summary = gitnook_status_summary(&root, "default").unwrap();
     assert_eq!(summary, "clean");
 }
 
@@ -309,12 +309,12 @@ fn status_modified_after_disk_change() {
     commit(&root, "init", None).unwrap();
 
     fs::write(&path, "v2").unwrap();
-    let summary = gitlet_status_summary(&root, "default").unwrap();
+    let summary = gitnook_status_summary(&root, "default").unwrap();
     assert!(summary.contains("modified"));
 }
 
 #[test]
-fn status_no_gitlets_prints_message() {
+fn status_no_gitnooks_prints_message() {
     let (_tmp, root) = setup();
     status(&root, None).unwrap();
 }
@@ -330,7 +330,7 @@ fn status_unknown_name_errors() {
 // ── log ────────────────────────────────────────────────────────────────────
 
 #[test]
-fn log_empty_gitlet_returns_ok() {
+fn log_empty_gitnook_returns_ok() {
     let (_tmp, root) = setup();
     init(&root, "default").unwrap();
     log(&root, None).unwrap();
@@ -357,7 +357,7 @@ fn log_unknown_name_errors() {
 // ── list ───────────────────────────────────────────────────────────────────
 
 #[test]
-fn list_no_gitlets_returns_ok() {
+fn list_no_gitnooks_returns_ok() {
     let (_tmp, root) = setup();
     list(&root).unwrap();
 }
@@ -376,7 +376,7 @@ fn list_shows_correct_file_counts() {
 // ── switch ──────────────────────────────────────────────────────────────────
 
 #[test]
-fn switch_changes_active_gitlet() {
+fn switch_changes_active_gitnook() {
     let (_tmp, root) = setup();
     init(&root, "first").unwrap();
     init(&root, "second").unwrap();

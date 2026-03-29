@@ -2,7 +2,7 @@ mod cli;
 mod config;
 mod error;
 mod exclude;
-mod gitlet;
+mod gitnook;
 mod repo;
 
 use clap::Parser;
@@ -22,35 +22,35 @@ fn run() -> anyhow::Result<()> {
         Commands::Init { name } => {
             let git_root = repo::find_git_root()?;
             let name = name.as_deref().unwrap_or("default");
-            gitlet::init(&git_root, name)
+            gitnook::init(&git_root, name)
         }
         Commands::Add { files, to } => {
             let git_root = repo::find_git_root()?;
-            gitlet::add(&git_root, &files, to.as_deref())
+            gitnook::add(&git_root, &files, to.as_deref())
         }
         Commands::Remove { file, to } => {
             let git_root = repo::find_git_root()?;
-            gitlet::remove(&git_root, &file, to.as_deref())
+            gitnook::remove(&git_root, &file, to.as_deref())
         }
         Commands::Commit { m, to } => {
             let git_root = repo::find_git_root()?;
-            gitlet::commit(&git_root, &m, to.as_deref())
+            gitnook::commit(&git_root, &m, to.as_deref())
         }
         Commands::Status { name } => {
             let git_root = repo::find_git_root()?;
-            gitlet::status(&git_root, name.as_deref())
+            gitnook::status(&git_root, name.as_deref())
         }
         Commands::Log { name } => {
             let git_root = repo::find_git_root()?;
-            gitlet::log(&git_root, name.as_deref())
+            gitnook::log(&git_root, name.as_deref())
         }
         Commands::List => {
             let git_root = repo::find_git_root()?;
-            gitlet::list(&git_root)
+            gitnook::list(&git_root)
         }
         Commands::Switch { name } => {
             let git_root = repo::find_git_root()?;
-            gitlet::switch(&git_root, &name)
+            gitnook::switch(&git_root, &name)
         }
     }
 }
