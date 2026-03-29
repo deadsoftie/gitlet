@@ -2,6 +2,12 @@
 name = "gitnook"
 version = "1.0.0"
 edition = "2021"
+description = "Lightweight local version control contexts inside any Git repo"
+license = "MIT"
+repository = "https://github.com/deadsoftie/gitnook"
+readme = "README.md"
+keywords = ["git", "version-control", "local", "cli", "developer-tools"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 clap = { version = "=4.5.23", features = ["derive"] }
