@@ -56,5 +56,9 @@ fn run() -> anyhow::Result<()> {
             let git_root = repo::find_git_root()?;
             gitnook::diff(&git_root, name.as_deref())
         }
+        Commands::Destroy { name } => {
+            let git_root = repo::find_git_root()?;
+            gitnook::destroy(&git_root, &name)
+        }
     }
 }

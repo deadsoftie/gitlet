@@ -461,3 +461,81 @@ fn diff_targets_named_gitnook() {
     add(&root, &[file], Some("second")).unwrap();
     diff(&root, Some("second")).unwrap();
 }
+
+// ── destroy ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn destroy_removes_gitnook_directory() {
+    let (_tmp, root) = setup();
+    init(&root, "default").unwrap();
+    destroy(&root, "default").unwrap();
+    assert!(!root.join(".gitnook/default").exists());
+}
+
+#[test]
+fn destroy_removes_tracked_files_from_exclude() {
+    let (_tmp, root) = setup();
+    init(&root, "default").unwrap();
+    let file = make_file(&root, "notes.md", "hello");
+    add(&root, &[file], None).unwrap();
+    assert!(crate::exclude::has_exclusion(&root, "notes.md").unwrap());
+
+    destroy(&root, "default").unwrap();
+    assert!(!crate::exclude::has_exclusion(&root, "notes.md").unwrap());
+}
+
+#[test]
+fn destroy_last_gitnook_removes_gitnook_root_and_exclude_entry() {
+    let (_tmp, root) = setup();
+    init(&root, "default").unwrap();
+    assert!(crate::exclude::has_exclusion(&root, ".gitnook/").unwrap());
+
+    destroy(&root, "default").unwrap();
+    assert!(!root.join(".gitnook").exists());
+    assert!(!crate::exclude::has_exclusion(&root, ".gitnook/").unwrap());
+}
+
+#[test]
+fn destroy_one_of_two_updates_config() {
+    let (_tmp, root) = setup();
+    init(&root, "alpha").unwrap();
+    init(&root, "beta").unwrap();
+    destroy(&root, "beta").unwrap();
+
+    let cfg = crate::config::load(&root).unwrap();
+    assert!(!cfg.gitnooks.contains_key("beta"));
+    assert!(cfg.gitnooks.contains_key("alpha"));
+}
+
+#[test]
+fn destroy_active_gitnook_switches_active_to_remaining() {
+    let (_tmp, root) = setup();
+    init(&root, "first").unwrap();
+    init(&root, "second").unwrap();
+    // first is active; destroy it
+    destroy(&root, "first").unwrap();
+
+    let cfg = crate::config::load(&root).unwrap();
+    assert!(!cfg.gitnooks.contains_key("first"));
+    assert_ne!(cfg.active, "first");
+}
+
+#[test]
+fn destroy_nonexistent_errors() {
+    let (_tmp, root) = setup();
+    init(&root, "default").unwrap();
+    let err = destroy(&root, "ghost").unwrap_err();
+    assert!(err.to_string().contains("does not exist"));
+}
+
+#[test]
+fn destroy_clears_multiple_tracked_files_from_exclude() {
+    let (_tmp, root) = setup();
+    init(&root, "default").unwrap();
+    let f1 = make_file(&root, "a.txt", "a");
+    let f2 = make_file(&root, "b.txt", "b");
+    add(&root, &[f1, f2], None).unwrap();
+    destroy(&root, "default").unwrap();
+    assert!(!crate::exclude::has_exclusion(&root, "a.txt").unwrap());
+    assert!(!crate::exclude::has_exclusion(&root, "b.txt").unwrap());
+}

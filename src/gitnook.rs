@@ -773,6 +773,76 @@ fn print_hunks(edits: &[Edit], old_lines: &[&str], new_lines: &[&str]) {
     }
 }
 
+pub fn destroy(git_root: &Path, name: &str) -> anyhow::Result<()> {
+    let git_root = git_root
+        .canonicalize()
+        .with_context(|| format!("failed to canonicalize {}", git_root.display()))?;
+    let git_root = git_root.as_path();
+
+    let mut cfg = config::load(git_root)?;
+
+    if !cfg.gitnooks.contains_key(name) {
+        return Err(anyhow!(
+            "gitnook '{}' does not exist. Run 'gitnook list' to see all gitnooks.",
+            name
+        ));
+    }
+
+    let gitnook_dir = git_root.join(".gitnook").join(name);
+
+    // Collect tracked file paths from the index before deleting the repo
+    let tracked: Vec<String> = {
+        let repo = git2::Repository::open(&gitnook_dir)
+            .with_context(|| format!("failed to open gitnook repo '{}'", name))?;
+        let index = repo.index().context("failed to read gitnook index")?;
+        (0..index.len())
+            .filter_map(|i| index.get(i))
+            .map(|e| String::from_utf8_lossy(&e.path).into_owned())
+            .collect()
+    };
+
+    // Remove each tracked file from .git/info/exclude
+    for path in &tracked {
+        exclude::remove_exclusion(git_root, path)?;
+    }
+
+    // Delete the gitnook's bare repo directory
+    std::fs::remove_dir_all(&gitnook_dir)
+        .with_context(|| format!("failed to remove {}", gitnook_dir.display()))?;
+
+    // Remove from config; reassign active if needed
+    cfg.gitnooks.remove(name);
+    if cfg.active == name {
+        cfg.active = cfg.gitnooks.keys().next().cloned().unwrap_or_default();
+    }
+
+    if cfg.gitnooks.is_empty() {
+        // Last gitnook destroyed — remove config file, the .gitnook/ dir, and its exclude entry
+        let gitnook_root = git_root.join(".gitnook");
+        let config_file = gitnook_root.join("config.toml");
+        if config_file.exists() {
+            std::fs::remove_file(&config_file)
+                .with_context(|| format!("failed to remove {}", config_file.display()))?;
+        }
+        exclude::remove_exclusion(git_root, ".gitnook/")?;
+        if gitnook_root.exists() {
+            std::fs::remove_dir_all(&gitnook_root)
+                .with_context(|| format!("failed to remove {}", gitnook_root.display()))?;
+        }
+    } else {
+        config::save(git_root, &cfg)?;
+    }
+
+    let file_word = if tracked.len() == 1 { "file" } else { "files" };
+    println!(
+        "Destroyed gitnook '{}' ({} {} removed from exclude).",
+        name,
+        tracked.len(),
+        file_word
+    );
+    Ok(())
+}
+
 pub fn switch(git_root: &Path, name: &str) -> anyhow::Result<()> {
     let cfg = config::load(git_root)?;
 

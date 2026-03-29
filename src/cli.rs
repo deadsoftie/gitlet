@@ -62,4 +62,9 @@ pub enum Commands {
         /// Name of a specific gitnook (defaults to active)
         name: Option<String>,
     },
+    /// Permanently delete a gitnook and clean up all its exclusions
+    Destroy {
+        /// Name of the gitnook to destroy
+        name: String,
+    },
 }
