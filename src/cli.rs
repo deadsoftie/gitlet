@@ -57,4 +57,9 @@ pub enum Commands {
         /// Name of the gitnook to activate
         name: String,
     },
+    /// Show working-tree diff against the last gitnook commit
+    Diff {
+        /// Name of a specific gitnook (defaults to active)
+        name: Option<String>,
+    },
 }

@@ -406,3 +406,58 @@ fn switch_reflected_in_list() {
     assert_eq!(cfg.active, "beta");
     list(&root).unwrap();
 }
+
+// ── diff ────────────────────────────────────────────────────────────────────
+
+#[test]
+fn diff_no_changes_after_commit() {
+    let (_tmp, root) = setup();
+    init(&root, "default").unwrap();
+    let file = make_file(&root, "notes.md", "hello\n");
+    add(&root, &[file], None).unwrap();
+    commit(&root, "init", None).unwrap();
+    // File unchanged — diff should report no changes without error
+    diff(&root, None).unwrap();
+}
+
+#[test]
+fn diff_shows_new_file_before_commit() {
+    let (_tmp, root) = setup();
+    init(&root, "default").unwrap();
+    make_file(&root, "notes.md", "hello\n");
+    add(&root, &[root.join("notes.md").to_string_lossy().into_owned()], None).unwrap();
+    // No commits yet — staged file should appear as new
+    diff(&root, None).unwrap();
+}
+
+#[test]
+fn diff_shows_modification_after_commit() {
+    let (_tmp, root) = setup();
+    init(&root, "default").unwrap();
+    let path = root.join("notes.md");
+    fs::write(&path, "v1\n").unwrap();
+    add(&root, &[path.to_string_lossy().into_owned()], None).unwrap();
+    commit(&root, "init", None).unwrap();
+
+    fs::write(&path, "v2\n").unwrap();
+    // File modified on disk — diff should complete without error
+    diff(&root, None).unwrap();
+}
+
+#[test]
+fn diff_unknown_name_errors() {
+    let (_tmp, root) = setup();
+    init(&root, "default").unwrap();
+    let err = diff(&root, Some("ghost")).unwrap_err();
+    assert!(err.to_string().contains("does not exist"));
+}
+
+#[test]
+fn diff_targets_named_gitnook() {
+    let (_tmp, root) = setup();
+    init(&root, "first").unwrap();
+    init(&root, "second").unwrap();
+    let file = make_file(&root, "notes.md", "hello\n");
+    add(&root, &[file], Some("second")).unwrap();
+    diff(&root, Some("second")).unwrap();
+}

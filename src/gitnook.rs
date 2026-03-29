@@ -557,6 +557,222 @@ fn find_owning_gitnook(
     Ok(None)
 }
 
+pub fn diff(git_root: &Path, name: Option<&str>) -> anyhow::Result<()> {
+    let git_root = git_root
+        .canonicalize()
+        .with_context(|| format!("failed to canonicalize {}", git_root.display()))?;
+    let git_root = git_root.as_path();
+
+    let cfg = config::load(git_root)?;
+    let target = name.unwrap_or(&cfg.active);
+
+    if !cfg.gitnooks.contains_key(target) {
+        return Err(anyhow!("gitnook '{}' does not exist.", target));
+    }
+
+    let gitnook_dir = git_root.join(".gitnook").join(target);
+    let repo = git2::Repository::open(&gitnook_dir)
+        .with_context(|| format!("failed to open gitnook repo '{}'", target))?;
+
+    let index = repo.index().context("failed to read gitnook index")?;
+
+    let head_tree: Option<git2::Tree> = match repo.head() {
+        Ok(head) => Some(head.peel_to_tree().context("failed to peel HEAD to tree")?),
+        Err(_) => None,
+    };
+
+    let mut found_diff = false;
+
+    for i in 0..index.len() {
+        let entry = match index.get(i) {
+            Some(e) => e,
+            None => continue,
+        };
+        let path_str = String::from_utf8_lossy(&entry.path).into_owned();
+        let rel = std::path::Path::new(&path_str);
+
+        let new_content = std::fs::read_to_string(git_root.join(rel)).unwrap_or_default();
+
+        let old_content: String = if let Some(tree) = &head_tree {
+            match tree.get_path(rel) {
+                Ok(tree_entry) => {
+                    let oid = tree_entry.id();
+                    repo.find_blob(oid)
+                        .map(|b| String::from_utf8_lossy(b.content()).into_owned())
+                        .unwrap_or_default()
+                }
+                Err(_) => String::new(),
+            }
+        } else {
+            String::new()
+        };
+
+        if old_content == new_content {
+            continue;
+        }
+
+        found_diff = true;
+        let is_new = head_tree.as_ref().map(|t| t.get_path(rel).is_err()).unwrap_or(true);
+        print_unified_diff(&path_str, &old_content, &new_content, is_new);
+    }
+
+    if !found_diff {
+        println!("No changes.");
+    }
+
+    Ok(())
+}
+
+fn print_unified_diff(path: &str, old: &str, new: &str, is_new: bool) {
+    let old_lines: Vec<&str> = old.lines().collect();
+    let new_lines: Vec<&str> = new.lines().collect();
+    let edits = diff_lines(&old_lines, &new_lines);
+
+    println!("diff --gitnook a/{} b/{}", path, path);
+    println!("--- {}", if is_new { "/dev/null".to_string() } else { format!("a/{}", path) });
+    println!("+++ b/{}", path);
+    print_hunks(&edits, &old_lines, &new_lines);
+}
+
+#[derive(Clone, Copy)]
+enum Edit {
+    Keep,
+    Delete,
+    Insert,
+}
+
+/// Compute an LCS-based edit script between two line sequences.
+fn diff_lines(old: &[&str], new: &[&str]) -> Vec<Edit> {
+    let (m, n) = (old.len(), new.len());
+    // dp[i][j] = LCS length of old[i..] vs new[j..]
+    let mut dp = vec![vec![0u32; n + 1]; m + 1];
+    for i in (0..m).rev() {
+        for j in (0..n).rev() {
+            dp[i][j] = if old[i] == new[j] {
+                dp[i + 1][j + 1] + 1
+            } else {
+                dp[i + 1][j].max(dp[i][j + 1])
+            };
+        }
+    }
+    let (mut i, mut j) = (0, 0);
+    let mut edits = Vec::new();
+    while i < m || j < n {
+        if i < m && j < n && old[i] == new[j] {
+            edits.push(Edit::Keep);
+            i += 1;
+            j += 1;
+        } else if j < n && (i >= m || dp[i][j + 1] >= dp[i + 1][j]) {
+            edits.push(Edit::Insert);
+            j += 1;
+        } else {
+            edits.push(Edit::Delete);
+            i += 1;
+        }
+    }
+    edits
+}
+
+/// Format and print hunks in unified diff style with 3 lines of context.
+fn print_hunks(edits: &[Edit], old_lines: &[&str], new_lines: &[&str]) {
+    const CTX: usize = 3;
+
+    // Annotate each edit with its 0-based line indices in old/new
+    let mut entries: Vec<(Edit, Option<usize>, Option<usize>)> = Vec::with_capacity(edits.len());
+    let (mut oi, mut ni) = (0usize, 0usize);
+    for &e in edits {
+        match e {
+            Edit::Keep   => { entries.push((e, Some(oi), Some(ni))); oi += 1; ni += 1; }
+            Edit::Delete => { entries.push((e, Some(oi), None));     oi += 1; }
+            Edit::Insert => { entries.push((e, None,     Some(ni)));          ni += 1; }
+        }
+    }
+
+    // Positions of changed (non-Keep) entries
+    let changed: Vec<usize> = entries
+        .iter()
+        .enumerate()
+        .filter(|(_, (e, _, _))| !matches!(e, Edit::Keep))
+        .map(|(i, _)| i)
+        .collect();
+
+    if changed.is_empty() {
+        return;
+    }
+
+    // Merge overlapping context windows into hunk ranges [start, end)
+    let mut ranges: Vec<(usize, usize)> = Vec::new();
+    let mut hs = changed[0].saturating_sub(CTX);
+    let mut he = (changed[0] + CTX + 1).min(entries.len());
+    for &c in &changed[1..] {
+        let cs = c.saturating_sub(CTX);
+        if cs <= he {
+            he = (c + CTX + 1).min(entries.len());
+        } else {
+            ranges.push((hs, he));
+            hs = cs;
+            he = (c + CTX + 1).min(entries.len());
+        }
+    }
+    ranges.push((hs, he));
+
+    for (s, e) in ranges {
+        let hunk = &entries[s..e];
+
+        let old_count = hunk.iter().filter(|(e, _, _)| !matches!(e, Edit::Insert)).count();
+        let new_count = hunk.iter().filter(|(e, _, _)| !matches!(e, Edit::Delete)).count();
+
+        // 1-based start line in old file; fall back to last old line before hunk when all-inserts
+        let old_start = hunk
+            .iter()
+            .find_map(|(_, oi, _)| *oi)
+            .map(|i| i + 1)
+            .unwrap_or_else(|| {
+                entries[..s]
+                    .iter()
+                    .rev()
+                    .find_map(|(_, oi, _)| *oi)
+                    .map(|i| i + 1)
+                    .unwrap_or(0)
+            });
+
+        // 1-based start line in new file; fall back similarly when all-deletes
+        let new_start = hunk
+            .iter()
+            .find_map(|(_, _, ni)| *ni)
+            .map(|i| i + 1)
+            .unwrap_or_else(|| {
+                entries[..s]
+                    .iter()
+                    .rev()
+                    .find_map(|(_, _, ni)| *ni)
+                    .map(|i| i + 1)
+                    .unwrap_or(0)
+            });
+
+        // Unified diff header: omit count when 1, show ",0" when 0
+        let old_part = match old_count {
+            0 => format!("-{},0", old_start),
+            1 => format!("-{}", old_start),
+            n => format!("-{},{}", old_start, n),
+        };
+        let new_part = match new_count {
+            0 => format!("+{},0", new_start),
+            1 => format!("+{}", new_start),
+            n => format!("+{},{}", new_start, n),
+        };
+        println!("@@ {} {} @@", old_part, new_part);
+
+        for &(edit, oi, ni) in hunk {
+            match edit {
+                Edit::Keep   => println!(" {}", old_lines[oi.unwrap()]),
+                Edit::Delete => println!("-{}", old_lines[oi.unwrap()]),
+                Edit::Insert => println!("+{}", new_lines[ni.unwrap()]),
+            }
+        }
+    }
+}
+
 pub fn switch(git_root: &Path, name: &str) -> anyhow::Result<()> {
     let cfg = config::load(git_root)?;
 

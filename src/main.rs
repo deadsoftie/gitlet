@@ -52,5 +52,9 @@ fn run() -> anyhow::Result<()> {
             let git_root = repo::find_git_root()?;
             gitnook::switch(&git_root, &name)
         }
+        Commands::Diff { name } => {
+            let git_root = repo::find_git_root()?;
+            gitnook::diff(&git_root, name.as_deref())
+        }
     }
 }

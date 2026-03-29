@@ -88,6 +88,7 @@ The shared repo stays clean. And you get a full audit trail of how your AI conte
 | `gitnook log [name]`                 | Show commit history for a gitnook                        |
 | `gitnook list`                       | List all gitnooks with file counts and active marker     |
 | `gitnook switch <n>`                 | Change the active gitnook                                |
+| `gitnook diff [name]`                | Show working-tree diff against the last gitnook commit  |
 
 All commands that target a specific gitnook accept `--to <n>` to override the active gitnook without changing the global config.
 
@@ -134,6 +135,5 @@ Each gitnook is a fully valid bare git repository. Commits, blobs, and trees are
 
 - `gitnook push` - push a gitnook as a git bundle or bare remote for backup or selective sharing
 - `gitnook branch` / `gitnook checkout` - branching within a gitnook
-- `gitnook diff` - show working-tree diff against the last gitnook commit
 - `gitnook destroy <n>` - safely remove a gitnook and clean up all its exclusions
 - Shell completions for all commands and gitnook names
