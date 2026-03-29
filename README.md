@@ -89,6 +89,7 @@ The shared repo stays clean. And you get a full audit trail of how your AI conte
 | `gitnook list`                       | List all gitnooks with file counts and active marker     |
 | `gitnook switch <n>`                 | Change the active gitnook                                |
 | `gitnook diff [name]`                | Show working-tree diff against the last gitnook commit  |
+| `gitnook destroy <name>`             | Permanently delete a gitnook and clean up all exclusions |
 
 All commands that target a specific gitnook accept `--to <n>` to override the active gitnook without changing the global config.
 
@@ -125,8 +126,6 @@ Each gitnook is a fully valid bare git repository. Commits, blobs, and trees are
 
 - **Local only.** Gitnooks are never pushed. There is no remote, clone, or collaboration support in v1.
 - **No branching.** Each gitnook has a single linear history. Branch management is not yet supported.
-- **No diff command.** Use `gitnook log` to inspect history; working-tree diffs are not yet exposed.
-- **No destroy command.** To remove a gitnook manually: delete `.gitnook/<n>/`, remove its entry from `.gitnook/config.toml`, and clean its paths from `.git/info/exclude`.
 - **One file, one gitnook.** A file can only belong to one gitnook at a time.
 
 ---
@@ -135,5 +134,4 @@ Each gitnook is a fully valid bare git repository. Commits, blobs, and trees are
 
 - `gitnook push` - push a gitnook as a git bundle or bare remote for backup or selective sharing
 - `gitnook branch` / `gitnook checkout` - branching within a gitnook
-- `gitnook destroy <n>` - safely remove a gitnook and clean up all its exclusions
 - Shell completions for all commands and gitnook names
