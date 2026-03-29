@@ -51,11 +51,6 @@ pub fn save(root: &Path, config: &GitnookConfig) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn get_active(root: &Path) -> anyhow::Result<String> {
-    let config = load(root)?;
-    Ok(config.active.clone())
-}
-
 pub fn set_active(root: &Path, name: &str) -> anyhow::Result<()> {
     let mut config = load(root)?;
     config.active = name.to_string();

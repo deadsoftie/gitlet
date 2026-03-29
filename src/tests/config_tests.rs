@@ -52,18 +52,11 @@ fn round_trip_preserves_fields() {
 }
 
 #[test]
-fn get_active_returns_active_field() {
-    let tmp = TempDir::new().unwrap();
-    save(tmp.path(), &make_config("personal", &["personal"])).unwrap();
-    assert_eq!(get_active(tmp.path()).unwrap(), "personal");
-}
-
-#[test]
 fn set_active_updates_active_field() {
     let tmp = TempDir::new().unwrap();
     save(tmp.path(), &make_config("default", &["default", "work"])).unwrap();
     set_active(tmp.path(), "work").unwrap();
-    assert_eq!(get_active(tmp.path()).unwrap(), "work");
+    assert_eq!(load(tmp.path()).unwrap().active, "work");
 }
 
 #[test]
